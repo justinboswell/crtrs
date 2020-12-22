@@ -70,24 +70,26 @@ fn export_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream {
 }
 
 fn export_unit_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream {
+    let fn_name = &method.sig.ident;
     let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);    
     let gen = quote! {
         #[allow(non_snake_case)]
         #[no_mangle]
-        pub extern "C" fn #exported_fn() {
-
+        pub extern "C" fn #exported_fn(me: *mut #struct_ident) {
+            me.#fn_name();
         }
     };
     gen.into()
 }
 
 fn export_ret_method(struct_ident: &Ident, method: &ImplItemMethod, return_ty: &Ident) -> TokenStream { 
+    let fn_name = &method.sig.ident;
     let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);    
     let gen = quote! {
         #[allow(non_snake_case)]
         #[no_mangle]
-        pub extern "C" fn #exported_fn() -> #return_ty {
-
+        pub extern "C" fn #exported_fn(me: *mut #struct_ident) -> #return_ty {
+            me.#fn_name()
         }
     };
     gen.into()
