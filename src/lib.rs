@@ -2,7 +2,9 @@
 extern crate crt_macros;
 
 #[crt_export]
-pub struct TestStruct;
+struct TestStruct {
+    member_int: i32,
+}
 
 #[crt_export]
 impl TestStruct {
