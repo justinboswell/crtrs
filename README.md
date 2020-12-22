@@ -32,7 +32,7 @@ pub struct TestStruct {
 pub extern "C" fn TestStruct_do_thing() {}
 #[allow(non_snake_case)]
 #[no_mangle]
-pub extern "C" fn TestStruct_return_str() {}
+pub extern "C" fn TestStruct_return_str() -> String {}
 impl TestStruct {
     pub fn do_thing(&self) {
         {
