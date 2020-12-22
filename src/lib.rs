@@ -1,18 +1,19 @@
+#![feature(rustc_private)]
 #[macro_use]
 extern crate crt_macros;
 
 #[crt_export]
-struct TestStruct {
+pub struct TestStruct {
     member_int: i32,
 }
 
 #[crt_export]
 impl TestStruct {
-    fn do_thing(&self) {
+    pub fn do_thing(&self) {
         println!("DO_THING");
     }
 
-    fn return_str(&self) -> String {
+    pub fn return_str(&self) -> String {
         return String::from("RETURN_STR");
     }
 }

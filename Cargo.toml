@@ -5,6 +5,10 @@ authors = ["jboswell"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib"]
+bench = false
 
 [dependencies]
 crt_macros = { path = "./crt_macros" }
+

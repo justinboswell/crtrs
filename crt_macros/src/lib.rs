@@ -1,34 +1,42 @@
 
 extern crate proc_macro;
 
-use proc_macro::TokenStream;
-use syn::*;
+use proc_macro::TokenStream as RawTokenStream;
+use proc_macro2::TokenStream;
+use syn::{
+    parse_macro_input, Ident, ImplItem, ImplItemMethod, Item, ItemImpl, ItemStruct, Type 
+};
 use quote::{quote, format_ident};
 
 #[proc_macro_attribute]
-pub fn crt_export(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
-    let original : TokenStream = tokens.clone();
+pub fn crt_export(_attr: RawTokenStream, tokens: RawTokenStream) -> RawTokenStream {
+    let original = tokens.clone();
     let target = parse_macro_input!(tokens as Item);
     //println!("TARGET={:#?}", target);
-    let mut output = match target {
-        Item::Struct(struct_item) => export_struct(struct_item),
-        Item::Impl(impl_item) => export_impl(impl_item),
-        _ => TokenStream::new()
+    let mut output : RawTokenStream = match target {
+        Item::Struct(struct_item) => export_struct(struct_item).into(),
+        Item::Impl(impl_item) => export_impl(impl_item).into(),
+        _ => RawTokenStream::new()
     };
     output.extend(original);
-    output
+    output.into()
 }
 
 fn export_struct(struct_item: ItemStruct) -> TokenStream {
-    let new_fn = format_ident!("{}_new", struct_item.ident);
-    let del_fn = format_ident!("{}_destroy", struct_item.ident);
+    let struct_name = struct_item.ident;
+    let new_fn = format_ident!("{}_new", struct_name);
+    let del_fn = format_ident!("{}_destroy", struct_name);
     let gen = quote!{
         extern crate libc;
-        extern "C" fn #new_fn () {
-            
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        pub extern "C" fn #new_fn() -> *mut #struct_name {
+            unsafe { std::mem::zeroed() } 
         }
-        extern "C" fn #del_fn () {
-
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        pub extern "C" fn #del_fn(s: *mut #struct_name) {
+            std::mem::drop(s);
         }
         #[repr(C)]
     };
@@ -54,7 +62,9 @@ fn export_impl(impl_item: ItemImpl) -> TokenStream {
 fn export_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream { 
     let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);
     let gen = quote! {
-        extern "C" fn #exported_fn() {
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        pub extern "C" fn #exported_fn() {
             
         }
     };
