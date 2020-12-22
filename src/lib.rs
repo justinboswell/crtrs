@@ -1,20 +1,16 @@
-use crt_macros::crt_export;
+#[macro_use]
+extern crate crt_macros;
 
-pub trait TestTrait {
-    fn do_thing(&self);
-    fn return_str(&self) -> String;
-}
+#[crt_export]
+pub struct TestStruct;
 
-pub struct TestStruct {
-
-}
-
+#[crt_export]
 impl TestStruct {
     fn do_thing(&self) {
         println!("DO_THING");
     }
 
     fn return_str(&self) -> String {
-        return String::new("RETURN_STR");
+        return String::from("RETURN_STR");
     }
 }
