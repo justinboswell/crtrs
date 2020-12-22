@@ -29,10 +29,14 @@ pub struct TestStruct {
 }
 #[allow(non_snake_case)]
 #[no_mangle]
-pub extern "C" fn TestStruct_do_thing() {}
+pub extern "C" fn TestStruct_do_thing(me: *mut TestStruct) {
+    me.do_thing();
+}
 #[allow(non_snake_case)]
 #[no_mangle]
-pub extern "C" fn TestStruct_return_str() -> String {}
+pub extern "C" fn TestStruct_return_str(me: *mut TestStruct) -> String {
+    me.return_str()
+}
 impl TestStruct {
     pub fn do_thing(&self) {
         {
