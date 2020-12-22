@@ -4,7 +4,7 @@ extern crate proc_macro;
 use proc_macro::TokenStream as RawTokenStream;
 use proc_macro2::TokenStream;
 use syn::{
-    parse_macro_input, Ident, ImplItem, ImplItemMethod, Item, ItemImpl, ItemStruct, Type 
+    parse_macro_input, Ident, ImplItem, ImplItemMethod, Item, ItemImpl, ItemStruct, ReturnType, Type 
 };
 use quote::{quote, format_ident};
 
@@ -60,12 +60,34 @@ fn export_impl(impl_item: ItemImpl) -> TokenStream {
 }
 
 fn export_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream { 
-    let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);
+    match &method.sig.output {
+        ReturnType::Default => export_unit_method(struct_ident, method),
+        ReturnType::Type(_, ty) => match &**ty {
+            Type::Path(path) => export_ret_method(struct_ident, method, path.path.get_ident().unwrap()),
+            _ => TokenStream::new()
+        }
+    }
+}
+
+fn export_unit_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream {
+    let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);    
     let gen = quote! {
         #[allow(non_snake_case)]
         #[no_mangle]
         pub extern "C" fn #exported_fn() {
-            
+
+        }
+    };
+    gen.into()
+}
+
+fn export_ret_method(struct_ident: &Ident, method: &ImplItemMethod, return_ty: &Ident) -> TokenStream { 
+    let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);    
+    let gen = quote! {
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        pub extern "C" fn #exported_fn() -> #return_ty {
+
         }
     };
     gen.into()
