@@ -9,6 +9,9 @@ edition = "2018"
 crate-type = ["cdylib"]
 bench = false
 
+[build-dependencies]
+cmake = "0.1"
+
 [dependencies]
 crt_macros = { path = "./crt_macros" }
 
