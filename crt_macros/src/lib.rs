@@ -20,22 +20,11 @@ pub fn crt_export(_attr: RawTokenStream, tokens: RawTokenStream) -> RawTokenStre
     output.into()
 }
 
-fn export_struct(struct_item: ItemStruct) -> TokenStream {
-    let struct_name = struct_item.ident;
-    let new_fn = format_ident!("{}_new", struct_name);
-    let del_fn = format_ident!("{}_destroy", struct_name);
+fn export_struct(_struct_item: ItemStruct) -> TokenStream {
     let gen = quote!{
-        extern crate libc;
-        #[allow(non_snake_case)]
-        #[no_mangle]
-        pub extern "C" fn #new_fn() -> *mut #struct_name {
-            unsafe { std::mem::zeroed() } 
-        }
-        #[allow(non_snake_case)]
-        #[no_mangle]
-        pub extern "C" fn #del_fn(s: *mut #struct_name) {
-            std::mem::drop(s);
-        }
+        //extern crate libc;
+        // #[allow(non_snake_case)]
+        // #[no_mangle]
         #[repr(C)]
     };
     gen.into()
@@ -83,14 +72,19 @@ fn export_static_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenS
     let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);
     let args = export_args(struct_ident, method);
     let return_ty = export_return_type(method);
+    let return_kw = match return_ty.is_empty() {
+        true => return_ty.clone(),
+        false => quote! { return },
+    };
     let gen = quote! {
         #[allow(non_snake_case)]
+        #[allow(dead_code)]
         #[no_mangle]
         pub extern "C" fn #exported_fn(#args) #return_ty {
-            #struct_ident::#fn_name();
+            #return_kw #struct_ident::#fn_name();
         }
     };
-    println!("code: \n{}", gen);
+    //println!("code: \n{}", gen);
     gen.into()
 }
 
@@ -99,14 +93,20 @@ fn export_self_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStr
     let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);
     let args = export_args(struct_ident, method);
     let return_ty = export_return_type(method);
+    let return_kw = match return_ty.is_empty() {
+        true => return_ty.clone(),
+        false => quote! { return },
+    };
     let gen = quote! {
         #[allow(non_snake_case)]
+        #[allow(dead_code)]
         #[no_mangle]
         pub extern "C" fn #exported_fn(#args) #return_ty {
             let this = unsafe { me.as_ref().expect("NULL self provided") };
-            this.#fn_name();
+            #return_kw this.#fn_name();
         }
     };
+    //println!("code: \n{}", gen);
     gen.into()
 }
 
@@ -115,10 +115,16 @@ fn export_args(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream {
     let mut inputs : Vec<&FnArg> = method.sig.inputs.pairs().map(|p| {
         *p.value()
     }).collect();
-    if !is_static && inputs.len() > 1 {
-        inputs = inputs.split_off(1);
+    if !is_static {
+        if inputs.len() > 1 {
+            inputs = inputs[1..].to_owned();
+        } else {
+            inputs = vec![];
+        }
     }
     let mut args = String::new();
+
+    // Convert self: &mut Self -> me: *mut Self
     if !is_static {
         let recv = quote! {
             me: *mut #struct_ident
@@ -135,7 +141,7 @@ fn export_args(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream {
         args.push_str(&p);
     });
     let arg_tokens = syn::parse_str(&args).unwrap();
-    println!("args: ({})", arg_tokens);
+    //println!("args: ({})", arg_tokens);
     arg_tokens
 }
 

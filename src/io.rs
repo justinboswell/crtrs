@@ -1,23 +1,25 @@
 use std::ffi::c_void;
 
-#[allow(dead_code)]
+#[crt_export]
 struct EventLoopGroupOptions {
     num_threads: u16
 }
 
+#[crt_export]
 impl Default for EventLoopGroupOptions {
-    fn default() -> Self {
+    fn default() -> EventLoopGroupOptions {
         EventLoopGroupOptions {
             num_threads: 0,
         }
     }
 }
 
+#[crt_export]
 struct EventLoopGroup {
     c_elg : *const c_void,
 }
 
-#[allow(dead_code)]
+#[crt_export]
 impl EventLoopGroup {
     fn new(options: EventLoopGroupOptions) -> EventLoopGroup {
         EventLoopGroup {
@@ -26,6 +28,7 @@ impl EventLoopGroup {
     }
 }
 
+#[crt_export]
 impl Drop for EventLoopGroup {
     fn drop(&mut self) {
         unsafe {
