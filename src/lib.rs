@@ -1,4 +1,7 @@
 #![feature(rustc_private)]
+
+mod io;
+
 #[macro_use]
 extern crate crt_macros;
 
