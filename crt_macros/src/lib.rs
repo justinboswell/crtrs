@@ -3,10 +3,8 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream as RawTokenStream;
 use proc_macro2::TokenStream;
-use syn::{
-    parse_macro_input, Ident, ImplItem, ImplItemMethod, Item, ItemImpl, ItemStruct, ReturnType, Type 
-};
-use quote::{quote, format_ident};
+use syn::{parse_macro_input, Ident, ImplItem, ImplItemMethod, Item, ItemImpl, ItemStruct, ReturnType, Type, FnArg};
+use quote::{quote, format_ident, ToTokens};
 
 #[proc_macro_attribute]
 pub fn crt_export(_attr: RawTokenStream, tokens: RawTokenStream) -> RawTokenStream {
@@ -59,23 +57,52 @@ fn export_impl(impl_item: ItemImpl) -> TokenStream {
     gen_tokens
 }
 
-fn export_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream { 
-    match &method.sig.output {
-        ReturnType::Default => export_unit_method(struct_ident, method),
-        ReturnType::Type(_, ty) => match &**ty {
-            Type::Path(path) => export_ret_method(struct_ident, method, path.path.get_ident().unwrap()),
-            _ => TokenStream::new()
-        }
+fn method_is_static(method: &ImplItemMethod) -> bool {
+    match method.sig.inputs.first() {
+        Some(FnArg::Receiver(..)) => false,
+        _ => true,
     }
 }
 
-fn export_unit_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream {
+fn export_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream { 
+    match method_is_static(method) {
+        true => export_static_method(struct_ident, method),
+        false => export_self_method(struct_ident, method),
+    }
+}
+
+fn export_return_type(method: &ImplItemMethod) -> TokenStream {
+    match &method.sig.output {
+        ReturnType::Default => TokenStream::new(),
+        ReturnType::Type(_, ty) => quote! { -> #ty }
+    }
+}
+
+fn export_static_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream {
     let fn_name = &method.sig.ident;
-    let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);    
+    let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);
+    let args = export_args(struct_ident, method);
+    let return_ty = export_return_type(method);
     let gen = quote! {
         #[allow(non_snake_case)]
         #[no_mangle]
-        pub extern "C" fn #exported_fn(me: *mut #struct_ident) {
+        pub extern "C" fn #exported_fn(#args) #return_ty {
+            #struct_ident::#fn_name();
+        }
+    };
+    println!("code: \n{}", gen);
+    gen.into()
+}
+
+fn export_self_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream {
+    let fn_name = &method.sig.ident;
+    let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);
+    let args = export_args(struct_ident, method);
+    let return_ty = export_return_type(method);
+    let gen = quote! {
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        pub extern "C" fn #exported_fn(#args) #return_ty {
             let this = unsafe { me.as_ref().expect("NULL self provided") };
             this.#fn_name();
         }
@@ -83,18 +110,32 @@ fn export_unit_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStr
     gen.into()
 }
 
-fn export_ret_method(struct_ident: &Ident, method: &ImplItemMethod, return_ty: &Ident) -> TokenStream { 
-    let fn_name = &method.sig.ident;
-    let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);    
-    let gen = quote! {
-        #[allow(non_snake_case)]
-        #[no_mangle]
-        pub extern "C" fn #exported_fn(me: *mut #struct_ident) -> #return_ty {
-            let this = unsafe { me.as_ref().expect("NULL self provided") };
-            this.#fn_name()
+fn export_args(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream {
+    let is_static = method_is_static(method);
+    let mut inputs : Vec<&FnArg> = method.sig.inputs.pairs().map(|p| {
+        *p.value()
+    }).collect();
+    if !is_static && inputs.len() > 1 {
+        inputs = inputs.split_off(1);
+    }
+    let mut args = String::new();
+    if !is_static {
+        let recv = quote! {
+            me: *mut #struct_ident
+        };
+        args.push_str(&recv.to_string());
+    }
+    let params = inputs.iter().map(|p| {
+        p.to_token_stream().to_string()
+    });
+    params.for_each(|p| {
+        if !args.is_empty() {
+            args.push_str(", ");
         }
-    };
-    gen.into()
+        args.push_str(&p);
+    });
+    let arg_tokens = syn::parse_str(&args).unwrap();
+    println!("args: ({})", arg_tokens);
+    arg_tokens
 }
-
 

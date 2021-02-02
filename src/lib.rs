@@ -8,21 +8,21 @@ extern crate crt_macros;
 use std::ffi::CStr;
 use std::os::raw::c_char;
 
-#[crt_export]
-pub struct TestStruct {
-    member_int: i32,
-}
-
-#[crt_export]
-impl TestStruct {
-    pub fn do_thing(&self) {
-        println!("DO_THING");
-    }
-
-    pub fn return_str(&self) -> *const u8 {
-        return "RETURN_STR".as_ptr();
-    }
-}
+// #[crt_export]
+// pub struct TestStruct {
+//     member_int: i32,
+// }
+//
+// #[crt_export]
+// impl TestStruct {
+//     pub fn do_thing(&self) {
+//         println!("DO_THING");
+//     }
+//
+//     pub fn return_str(&self) -> *const u8 {
+//         return "RETURN_STR".as_ptr();
+//     }
+// }
 
 #[allow(dead_code)]
 extern "C" {
@@ -34,10 +34,13 @@ extern "C" {
     pub fn aws_crt_error_debug_str(error_code: i32) -> *const c_char;
 }
 
+#[crt_export]
 pub struct CRT {
 
 }
 
+#[allow(dead_code)]
+#[crt_export]
 impl CRT {
     pub fn init() {
         unsafe {
