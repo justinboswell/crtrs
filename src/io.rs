@@ -1,7 +1,7 @@
 use std::ffi::c_void;
 
 #[crt_export]
-struct EventLoopGroupOptions {
+pub struct EventLoopGroupOptions {
     num_threads: u16
 }
 
@@ -15,7 +15,7 @@ impl Default for EventLoopGroupOptions {
 }
 
 #[crt_export]
-struct EventLoopGroup {
+pub struct EventLoopGroup {
     c_elg : *const c_void,
 }
 

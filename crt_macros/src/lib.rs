@@ -3,7 +3,7 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream as RawTokenStream;
 use proc_macro2::TokenStream;
-use syn::{parse_macro_input, Ident, ImplItem, ImplItemMethod, Item, ItemImpl, ItemStruct, ReturnType, Type, FnArg};
+use syn::{parse_macro_input, Ident, ImplItem, ImplItemMethod, Item, ItemImpl, ItemStruct, ReturnType, Type, FnArg, Pat};
 use quote::{quote, format_ident, ToTokens};
 
 #[proc_macro_attribute]
@@ -71,6 +71,7 @@ fn export_static_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenS
     let fn_name = &method.sig.ident;
     let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);
     let args = export_args(struct_ident, method);
+    let arg_names = arg_names(method);
     let return_ty = export_return_type(method);
     let return_kw = match return_ty.is_empty() {
         true => return_ty.clone(),
@@ -81,7 +82,7 @@ fn export_static_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenS
         #[allow(dead_code)]
         #[no_mangle]
         pub extern "C" fn #exported_fn(#args) #return_ty {
-            #return_kw #struct_ident::#fn_name();
+            #return_kw #struct_ident::#fn_name(#arg_names);
         }
     };
     //println!("code: \n{}", gen);
@@ -90,8 +91,12 @@ fn export_static_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenS
 
 fn export_self_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream {
     let fn_name = &method.sig.ident;
+    if fn_name == "drop" {
+        return export_drop_method(struct_ident, method);
+    }
     let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);
     let args = export_args(struct_ident, method);
+    let arg_names = arg_names(method);
     let return_ty = export_return_type(method);
     let return_kw = match return_ty.is_empty() {
         true => return_ty.clone(),
@@ -103,11 +108,46 @@ fn export_self_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStr
         #[no_mangle]
         pub extern "C" fn #exported_fn(#args) #return_ty {
             let this = unsafe { me.as_ref().expect("NULL self provided") };
-            #return_kw this.#fn_name();
+            #return_kw this.#fn_name(#arg_names);
         }
     };
     //println!("code: \n{}", gen);
     gen.into()
+}
+
+fn export_drop_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream {
+    let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);
+    let args = export_args(struct_ident, method);
+    let gen = quote! {
+        #[allow(non_snake_case)]
+        #[allow(dead_code)]
+        #[no_mangle]
+        pub extern "C" fn #exported_fn(#args) {
+            let this = unsafe { me.as_ref().expect("NULL self provided") };
+            std::mem::drop(this);
+        }
+    };
+    //println!("code: \n{}", gen);
+    gen.into()
+}
+
+fn arg_names(method: &ImplItemMethod) -> TokenStream {
+    let mut args = String::new();
+    method.sig.inputs.pairs().for_each(|p| {
+       match p.value() {
+           FnArg::Receiver(..) => (),
+           FnArg::Typed(typed) => match &typed.pat.as_ref() {
+               Pat::Ident(ident) => {
+                   if !args.is_empty() {
+                       args.push_str(", ");
+                   }
+                   args.push_str(&ident.ident.to_string())
+               },
+               _ => panic!("What")
+           }
+       }
+    });
+    syn::parse_str(&args).unwrap()
 }
 
 fn export_args(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream {
