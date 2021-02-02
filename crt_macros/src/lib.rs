@@ -12,7 +12,7 @@ use quote::{quote, format_ident};
 pub fn crt_export(_attr: RawTokenStream, tokens: RawTokenStream) -> RawTokenStream {
     let original = tokens.clone();
     let target = parse_macro_input!(tokens as Item);
-    //println!("TARGET={:#?}", target);
+
     let mut output : RawTokenStream = match target {
         Item::Struct(struct_item) => export_struct(struct_item).into(),
         Item::Impl(impl_item) => export_impl(impl_item).into(),
@@ -76,7 +76,8 @@ fn export_unit_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStr
         #[allow(non_snake_case)]
         #[no_mangle]
         pub extern "C" fn #exported_fn(me: *mut #struct_ident) {
-            me.#fn_name();
+            let this = unsafe { me.as_ref().expect("NULL self provided") };
+            this.#fn_name();
         }
     };
     gen.into()
@@ -89,7 +90,8 @@ fn export_ret_method(struct_ident: &Ident, method: &ImplItemMethod, return_ty: &
         #[allow(non_snake_case)]
         #[no_mangle]
         pub extern "C" fn #exported_fn(me: *mut #struct_ident) -> #return_ty {
-            me.#fn_name()
+            let this = unsafe { me.as_ref().expect("NULL self provided") };
+            this.#fn_name()
         }
     };
     gen.into()

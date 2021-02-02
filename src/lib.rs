@@ -13,7 +13,7 @@ impl TestStruct {
         println!("DO_THING");
     }
 
-    pub fn return_str(&self) -> String {
-        return String::from("RETURN_STR");
+    pub fn return_str(&self) -> *const u8 {
+        return "RETURN_STR".as_ptr();
     }
 }
