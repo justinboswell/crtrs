@@ -5,7 +5,6 @@ mod io;
 #[macro_use]
 extern crate crt_macros;
 
-use std::ffi::CStr;
 use std::os::raw::c_char;
 
 #[allow(dead_code)]
@@ -36,21 +35,21 @@ impl CRT {
         }
     }
 
-    pub fn error_str(error_code: i32) -> &'static CStr {
+    pub fn error_str(error_code: i32) -> *const c_char {
         unsafe {
-            CStr::from_ptr(aws_crt_error_str(error_code))
+            aws_crt_error_str(error_code)
         }
     }
 
-    pub fn error_name(error_code: i32) -> &'static CStr {
+    pub fn error_name(error_code: i32) -> *const c_char {
         unsafe {
-            CStr::from_ptr(aws_crt_error_name(error_code))
+            aws_crt_error_name(error_code)
         }
     }
 
-    pub fn error_debug_str(error_code: i32) -> &'static CStr {
+    pub fn error_debug_str(error_code: i32) -> *const c_char {
         unsafe {
-            CStr::from_ptr(aws_crt_error_debug_str(error_code))
+            aws_crt_error_debug_str(error_code)
         }
     }
 }
@@ -58,6 +57,13 @@ impl CRT {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::CStr;
+
+    fn c_str(str: *const c_char) -> &'static CStr {
+        unsafe {
+            CStr::from_ptr(str)
+        }
+    }
 
     #[test]
     fn init_and_clean_up() {
@@ -68,9 +74,9 @@ mod tests {
     #[test]
     fn error_lookup() {
         CRT::init();
-        assert_eq!("Success.", CRT::error_str(0).to_string_lossy());
-        assert_eq!("AWS_ERROR_SUCCESS", CRT::error_name(0).to_string_lossy());
-        assert_eq!("aws-c-common: AWS_ERROR_SUCCESS, Success.", CRT::error_debug_str(0).to_string_lossy());
+        assert_eq!("Success.", c_str( CRT::error_str(0)).to_string_lossy());
+        assert_eq!("AWS_ERROR_SUCCESS", c_str(CRT::error_name(0)).to_string_lossy());
+        assert_eq!("aws-c-common: AWS_ERROR_SUCCESS, Success.", c_str(CRT::error_debug_str(0)).to_string_lossy());
         CRT::clean_up();
     }
 }
