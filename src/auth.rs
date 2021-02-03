@@ -55,6 +55,15 @@ impl AwsCredentials {
     }
 }
 
+#[crt_export]
+impl Drop for AwsCredentials {
+    fn drop(&mut self) {
+        unsafe {
+            aws_crt_credentials_release(self.aws_credentials);
+        }
+    }
+}
+
 #[allow(dead_code)]
 extern "C" {
     pub fn aws_crt_credentials_new(
