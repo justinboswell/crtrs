@@ -16,6 +16,8 @@ extern "C" {
     pub fn aws_crt_error_str(error_code: i32) ->  *const c_char;
     pub fn aws_crt_error_name(error_code: i32) -> *const c_char;
     pub fn aws_crt_error_debug_str(error_code: i32) -> *const c_char;
+
+    pub fn aws_crt_last_error() -> i32;
 }
 
 #[crt_export]
@@ -53,6 +55,12 @@ impl CRT {
             aws_crt_error_debug_str(error_code)
         }
     }
+
+    pub fn last_error() -> i32 {
+        unsafe {
+            aws_crt_last_error()
+        }
+    }
 }
 
 #[repr(C)]
@@ -85,6 +93,16 @@ mod tests {
         assert_eq!("Success.", c_str( CRT::error_str(0)).to_string_lossy());
         assert_eq!("AWS_ERROR_SUCCESS", c_str(CRT::error_name(0)).to_string_lossy());
         assert_eq!("aws-c-common: AWS_ERROR_SUCCESS, Success.", c_str(CRT::error_debug_str(0)).to_string_lossy());
+        CRT::clean_up();
+    }
+
+    #[test]
+    fn lookup_last_error() {
+        CRT::init();
+        let last_error = CRT::last_error();
+        assert_eq!("Success.", c_str( CRT::error_str(last_error)).to_string_lossy());
+        assert_eq!("AWS_ERROR_SUCCESS", c_str(CRT::error_name(last_error)).to_string_lossy());
+        assert_eq!("aws-c-common: AWS_ERROR_SUCCESS, Success.", c_str(CRT::error_debug_str(last_error)).to_string_lossy());
         CRT::clean_up();
     }
 }
