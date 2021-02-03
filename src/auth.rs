@@ -4,9 +4,9 @@ use crate::CByteCursor;
 
 #[crt_export]
 pub struct AwsCredentialsOptions {
-    access_key_id : &'static CStr,
-    secret_access_key: &'static CStr,
-    session_token: &'static CStr,
+    access_key_id : *const c_char,
+    secret_access_key: *const c_char,
+    session_token: *const c_char,
     expiration_timepoint_seconds: u64,
 }
 
@@ -21,9 +21,9 @@ impl AwsCredentials {
         AwsCredentials {
             aws_credentials: unsafe {
                 aws_crt_credentials_new(
-                    options.access_key_id.as_ptr(),
-                    options.secret_access_key.as_ptr(),
-                    options.session_token.as_ptr(),
+                    options.access_key_id,
+                    options.secret_access_key,
+                    options.session_token,
                     options.expiration_timepoint_seconds
                 )
             }
@@ -77,4 +77,26 @@ extern "C" {
     pub fn aws_crt_credentials_get_secret_access_key(creds: *const c_void) -> CByteCursor;
     pub fn aws_crt_credentials_get_session_token(creds: *const c_void) -> CByteCursor;
     pub fn aws_crt_credentials_get_expiration_timepoint_seconds(creds: *const c_void) -> CByteCursor;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn static_str(s: &str) -> &'static str {
+        Box::leak(s.to_string().into_boxed_str())
+    }
+
+    #[test]
+    fn aws_credentials_lifetime() {
+        let access_key_id: &'static CStr = unsafe {CStr::from_ptr(static_str("ACCESS_KEY").as_ptr() as *const i8)};
+        let secret_access_key: &'static CStr = unsafe {CStr::from_ptr(static_str("SECRET_ACCESS_KEY").as_ptr() as *const i8)};
+        let session_token: &'static CStr = unsafe {CStr::from_ptr(static_str("SESSION_TOKEN").as_ptr() as *const i8)};
+        let _creds = AwsCredentials::new(&AwsCredentialsOptions {
+            access_key_id: access_key_id.as_ptr(),
+            secret_access_key: secret_access_key.as_ptr(),
+            session_token: session_token.as_ptr(),
+            expiration_timepoint_seconds: 0,
+        });
+    }
 }
