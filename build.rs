@@ -46,12 +46,22 @@ fn main() {
         //.define("CMAKE_PREFIX_PATH", "build/install")
         .define("CMAKE_INSTALL_LIBDIR", "lib")
         .define("BUILD_TESTING", "OFF")
+        .define("BUILD_SHARED_LIBS", "OFF")
         .out_dir(&out_dir);
     add_cmake_overrides(&mut config);
 
     config.build();
 
+    println!("cargo:rustc-link-search={}/lib", out_dir);
     println!("cargo:rustc-link-search={}/build", out_dir);
     println!("cargo:rustc-link-lib={}", "aws-crt-ffi");
+    println!("cargo:rustc-link-lib={}", "aws-c-auth");
+    println!("cargo:rustc-link-lib={}", "aws-c-http");
+    println!("cargo:rustc-link-lib={}", "aws-c-event-stream");
+    println!("cargo:rustc-link-lib={}", "aws-c-io");
+    println!("cargo:rustc-link-lib={}", "aws-c-cal");
+    println!("cargo:rustc-link-lib={}", "aws-c-compression");
+    println!("cargo:rustc-link-lib={}", "aws-checksums");
+    println!("cargo:rustc-link-lib={}", "aws-c-common");
     add_os_deps();
 }

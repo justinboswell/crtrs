@@ -1,6 +1,7 @@
 #![feature(rustc_private)]
 
 mod io;
+mod auth;
 
 #[macro_use]
 extern crate crt_macros;
@@ -52,6 +53,13 @@ impl CRT {
             aws_crt_error_debug_str(error_code)
         }
     }
+}
+
+#[repr(C)]
+#[non_exhaustive]
+pub struct CByteCursor {
+    pub len: usize,
+    pub ptr: *const u8,
 }
 
 #[cfg(test)]
