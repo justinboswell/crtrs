@@ -9,41 +9,60 @@ use quote::{quote, format_ident, ToTokens};
 #[proc_macro_attribute]
 pub fn crt_export(_attr: RawTokenStream, tokens: RawTokenStream) -> RawTokenStream {
     let original = tokens.clone();
-    let target = parse_macro_input!(tokens as Item);
+    let macro_target = parse_macro_input!(tokens as Item);
+    let target = parse_target(macro_target).unwrap();
 
     let mut output : RawTokenStream = match target {
-        Item::Struct(struct_item) => export_struct(struct_item).into(),
-        Item::Impl(impl_item) => export_impl(impl_item).into(),
-        _ => RawTokenStream::new()
+        Target::Struct(struct_target) => export_struct(&struct_target).into(),
+        Target::Impl(impl_target) => export_impl(&impl_target).into(),
     };
     output.extend(original);
     output.into()
 }
 
-fn export_struct(_struct_item: ItemStruct) -> TokenStream {
-    let gen = quote!{
-        //extern crate libc;
-        // #[allow(non_snake_case)]
-        // #[no_mangle]
-        #[repr(C)]
-    };
-    gen.into()
+enum Target {
+    Struct(Struct),
+    Impl(Vec<Method>),
 }
 
-fn export_impl(impl_item: ItemImpl) -> TokenStream {
-    let struct_type = *impl_item.self_ty;
-    
-    let mut gen_tokens = TokenStream::new();
-    if let Type::Path(struct_path) = struct_type {
-        let struct_ident = struct_path.path.get_ident().unwrap();
-        for item in impl_item.items.iter() {
-            gen_tokens.extend(match item {
-                ImplItem::Method(method) => export_method(struct_ident, method),
-                _ => TokenStream::new()
-            })
+struct Struct {
+    id: Ident,
+}
+
+struct Method {
+    is_static: bool,
+    target: Struct,
+    method: ImplItemMethod,
+}
+
+fn parse_target(macro_target: Item) -> Result<Target, &'static str> {
+    return match macro_target {
+        Item::Struct(struct_item) => Ok(Target::Struct(parse_struct(&struct_item))),
+        Item::Impl(impl_item) => Ok(Target::Impl(parse_impl(impl_item))),
+        _ => Err("crt_export attached to unknown token, only applicable to struct or impl")
+    }
+}
+
+fn parse_struct(struct_item: &ItemStruct) -> Struct {
+    return Struct {
+        id: struct_item.ident.clone()
+    }
+}
+
+fn parse_impl(impl_item: ItemImpl) -> Vec<Method> {
+    let mut methods: Vec<Method> = vec![];
+    for item in impl_item.items.iter() {
+        if let ImplItem::Method(method) = item {
+            methods.push(Method {
+                is_static: method_is_static(method),
+                target: Struct {
+                    id: impl_target(&impl_item).unwrap().clone()
+                },
+                method: method.clone(),
+            });
         }
     }
-    gen_tokens
+    methods
 }
 
 fn method_is_static(method: &ImplItemMethod) -> bool {
@@ -53,10 +72,35 @@ fn method_is_static(method: &ImplItemMethod) -> bool {
     }
 }
 
-fn export_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream { 
-    match method_is_static(method) {
-        true => export_static_method(struct_ident, method),
-        false => export_self_method(struct_ident, method),
+fn impl_target(impl_item: &ItemImpl) -> Result<&Ident, &'static str> {
+    let struct_type = &impl_item.self_ty;
+    return if let Type::Path(struct_path) = struct_type.as_ref() {
+        Ok(struct_path.path.get_ident().unwrap())
+    } else {
+        Err("No struct found in target item")
+    }
+}
+
+fn export_struct(_struct_target: &Struct) -> TokenStream {
+    let gen = quote!{
+        #[repr(C)]
+    };
+    gen.into()
+}
+
+fn export_impl(methods: &Vec<Method>) -> TokenStream {
+    let mut gen_tokens = TokenStream::new();
+    methods.iter().for_each(|method| {
+        gen_tokens.extend(export_method(method))
+    });
+    gen_tokens
+}
+
+fn export_method(method: &Method) -> TokenStream {
+    return if method.is_static {
+        export_static_method(method)
+    } else {
+        export_self_method(method)
     }
 }
 
@@ -67,37 +111,38 @@ fn export_return_type(method: &ImplItemMethod) -> TokenStream {
     }
 }
 
-fn export_static_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream {
-    let fn_name = &method.sig.ident;
-    let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);
-    let args = export_args(struct_ident, method);
-    let arg_names = arg_names(method);
-    let return_ty = export_return_type(method);
+fn export_static_method(method: &Method) -> TokenStream {
+    let fn_name = &method.method.sig.ident;
+    let exported_fn = format_ident!("{}_{}", method.target.id, method.method.sig.ident);
+    let args = export_args(&method.target.id, &method.method);
+    let arg_names = arg_names(&method.method);
+    let return_ty = export_return_type(&method.method);
     let return_kw = match return_ty.is_empty() {
         true => return_ty.clone(),
         false => quote! { return },
     };
+    let target = &method.target.id;
     let gen = quote! {
         #[allow(non_snake_case)]
         #[allow(dead_code)]
         #[no_mangle]
         pub extern "C" fn #exported_fn(#args) #return_ty {
-            #return_kw #struct_ident::#fn_name(#arg_names);
+            #return_kw #target::#fn_name(#arg_names);
         }
     };
     //println!("code: \n{}", gen);
     gen.into()
 }
 
-fn export_self_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream {
-    let fn_name = &method.sig.ident;
+fn export_self_method(method: &Method) -> TokenStream {
+    let fn_name = &method.method.sig.ident;
     if fn_name == "drop" {
-        return export_drop_method(struct_ident, method);
+        return export_drop_method(method);
     }
-    let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);
-    let args = export_args(struct_ident, method);
-    let arg_names = arg_names(method);
-    let return_ty = export_return_type(method);
+    let exported_fn = format_ident!("{}_{}", method.target.id, method.method.sig.ident);
+    let args = export_args(&method.target.id, &method.method);
+    let arg_names = arg_names(&method.method);
+    let return_ty = export_return_type(&method.method);
     let return_kw = match return_ty.is_empty() {
         true => return_ty.clone(),
         false => quote! { return },
@@ -115,9 +160,9 @@ fn export_self_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStr
     gen.into()
 }
 
-fn export_drop_method(struct_ident: &Ident, method: &ImplItemMethod) -> TokenStream {
-    let exported_fn = format_ident!("{}_{}", struct_ident, method.sig.ident);
-    let args = export_args(struct_ident, method);
+fn export_drop_method(method: &Method) -> TokenStream {
+    let exported_fn = format_ident!("{}_{}", method.target.id, method.method.sig.ident);
+    let args = export_args(&method.target.id, &method.method);
     let gen = quote! {
         #[allow(non_snake_case)]
         #[allow(dead_code)]

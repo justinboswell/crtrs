@@ -1,4 +1,4 @@
-use std::ffi::{c_void, CStr};
+use std::ffi::c_void;
 use std::os::raw::c_char;
 use crate::CByteCursor;
 
